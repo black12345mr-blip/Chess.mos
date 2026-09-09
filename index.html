@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess.com Style - มินิเกมหมากรุก</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Chessboard.js CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* สไตล์ไฮไลต์ช่องที่ถูกเลือกและช่องที่เดินได้ */
+        .highlight-selected {
+            background-color: rgba(246, 246, 105, 0.6) !important;
+        }
+        .highlight-hint {
+            box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.25);
+        }
+    </style>
+</head>
+<body class="bg-[#161512] text-[#ece6df] min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- หัวข้อเว็บ -->
+    <header class="mb-6 text-center">
+        <h1 class="text-3xl font-bold tracking-wider text-[#e1dfdd]">CHESS<span class="text-[#81b64c]">.clone</span></h1>
+        <p class="text-sm text-[#989795] mt-1">คลิกเลือกตัวหมากแล้วคลิกช่องปลายทางเพื่อเดิน (หรือลากวางก็ได้)</p>
+    </header>
+
+    <!-- พื้นที่หลักของเกม -->
+    <div class="flex flex-col lg:flex-row gap-8 items-center bg-[#262421] p-6 rounded-xl shadow-2xl border border-[#383531]">
+        
+        <!-- ฝั่งกระดานหมากรุก -->
+        <div class="flex flex-col items-center">
+            <!-- ข้อมูลผู้เล่น (สีดำ) -->
+            <div class="w-full max-w-[400px] flex justify-between items-center mb-2 px-1">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded bg-[#403d39] flex items-center justify-center font-bold text-sm">🤖</div>
+                    <div>
+                        <p class="text-sm font-semibold">ผู้เล่น (ดำ)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- กระดานหมากรุก (Chessboard) -->
+            <div id="board" class="w-[350px] sm:w-[420px] shadow-lg rounded-md overflow-hidden"></div>
+
+            <!-- ข้อมูลผู้เล่น (สีขาว) -->
+            <div class="w-full max-w-[400px] flex justify-between items-center mt-2 px-1">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded bg-[#f0d9b5] text-[#262421] flex items-center justify-center font-bold text-sm">😎</div>
+                    <div>
+                        <p class="text-sm font-semibold">คุณ (ขาว)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- แผงควบคุมและประวัติการเดิน (Sidebar) -->
+        <div class="w-full lg:w-[300px] flex flex-col justify-between bg-[#1e1c18] p-4 rounded-lg border border-[#383531] h-[420px]">
+            <div>
+                <h2 class="text-sm font-semibold text-[#b9b5af] uppercase tracking-wider mb-3">ประวัติการเดินหมาก</h2>
+                <div id="move-history" class="h-[260px] overflow-y-auto text-xs space-y-1 pr-2 text-[#b9b5af]">
+                    <p class="italic text-[#75726e]">เริ่มเกม... ตาเดินสีขาว</p>
+                </div>
+            </div>
+
+            <!-- ปุ่มควบคุมเกม -->
+            <div class="flex gap-2 pt-3 border-t border-[#383531]">
+                <button id="startBtn" class="flex-1 bg-[#81b64c] hover:bg-[#70a13e] text-white font-semibold py-2 px-4 rounded transition text-sm shadow">
+                    เริ่มเกมใหม่
+                </button>
+                <button id="undoBtn" class="bg-[#383531] hover:bg-[#484540] text-[#ece6df] font-semibold py-2 px-4 rounded transition text-sm">
+                    ย้อนกลับ
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- โหลด Chess.js และ Chessboard.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+    <script>
+        let board = null;
+        let game = new Chess();
+        let moveHistoryElement = $('#move-history');
+        let selectedSquare = null;
+
+        // ล้างไฮไลต์ทั้งหมดบนกระดาน
+        function removeHighlights() {
+            $('#board .square-55d63').removeClass('highlight-selected highlight-hint');
+        }
+
+        // แสดงไฮไลต์ช่องที่เลือกและจุดที่เดินได้
+        function showHighlights(square) {
+            removeHighlights();
+            $('#board .square-' + square).addClass('highlight-selected');
+
+            let moves = game.moves({ square: square, verbose: true });
+            for (let i = 0; i < moves.length; i++) {
+                $('#board .square-' + moves[i].to).addClass('highlight-hint');
+            }
+        }
+
+        // ฟังก์ชันประมวลผลการเดินหมาก
+        function makeMove(source, target) {
+            let move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q' // โปรโมตเป็นควีนอัตโนมัติ
+            });
+
+            if (move === null) return false;
+
+            board.position(game.fen());
+            updateStatus();
+            return true;
+        }
+
+        // อัปเดตประวัติและสถานะเกม
+        function updateStatus() {
+            let history = game.history({ verbose: true });
+            let historyHtml = '';
+
+            for (let i = 0; i < history.length; i += 2) {
+                let whiteMove = history[i] ? history[i].san : '';
+                let blackMove = history[i + 1] ? history[i + 1].san : '';
+                let moveNum = (i / 2) + 1;
+                historyHtml += `<div class="flex justify-between py-1 border-b border-[#2d2a26]"><span class="w-8 text-[#75726e]">${moveNum}.</span><span class="w-24">${whiteMove}</span><span class="w-24">${blackMove}</span></div>`;
+            }
+
+            moveHistoryElement.html(historyHtml || '<p class="italic text-[#75726e]">เริ่มเกม... ตาเดินสีขาว</p>');
+            moveHistoryElement.scrollTop(moveHistoryElement[0].scrollHeight);
+
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    alert('รุกฆาต! เกมจบลงแล้ว');
+                } else if (game.in_draw()) {
+                    alert('เสมอ!');
+                }
+            }
+        }
+
+        // --- ระบบ Drag and Drop ---
+        function onDragStart(source, piece, position, orientation) {
+            if (game.game_over()) return false;
+            // เช็คตาเดินว่าเป็นของฝ่ายนั้นจริงไหม
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+            selectedSquare = source;
+            showHighlights(source);
+        }
+
+        function onDrop(source, target) {
+            removeHighlights();
+            let success = makeMove(source, target);
+            if (!success) return 'snapback';
+            selectedSquare = null;
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        // --- ระบบ Click to Move (แก้ไขใหม่ให้แม่นยำ 100%) ---
+        $(document).on('click', '#board .square-55d63', function(e) {
+            let square = $(this).data('square');
+            if (!square) return;
+
+            if (game.game_over()) return;
+
+            // ขั้นที่ 1: ถ้ายังไม่ได้เลือกตัวหมาก ให้เลือกตัวหมากสีเดียวกับตาเดินปัจจุบัน
+            if (!selectedSquare) {
+                let piece = game.get(square);
+                if (piece && piece.color === game.turn()) {
+                    selectedSquare = square;
+                    showHighlights(square);
+                }
+            } 
+            // ขั้นที่ 2: ถ้าเลือกไว้อยู่แล้ว
+            else {
+                // ถ้าคลิกช่องเดิมซ้ำ -> ยกเลิกการเลือก
+                if (selectedSquare === square) {
+                    selectedSquare = null;
+                    removeHighlights();
+                    return;
+                }
+
+                // ลองเดินไปช่องที่คลิกใหม่
+                let success = makeMove(selectedSquare, square);
+
+                if (success) {
+                    // เดินสำเร็จ เคลียร์ค่า
+                    selectedSquare = null;
+                    removeHighlights();
+                } else {
+                    // เดินไม่ได้ แต่ถ้าคลิกตัวหมากสีตัวเองตัวอื่น ให้เปลี่ยนเป้าหมายไปตัวนั้นแทนทันที
+                    let piece = game.get(square);
+                    if (piece && piece.color === game.turn()) {
+                        selectedSquare = square;
+                        showHighlights(square);
+                    } else {
+                        selectedSquare = null;
+                        removeHighlights();
+                    }
+                }
+            }
+        });
+
+        // ตั้งค่ากระดาน
+        let config = {
+            draggable: true,
+            position: 'start',
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd,
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        }
+
+        board = Chessboard('board', config);
+
+        // ปุ่มเริ่มเกมใหม่
+        $('#startBtn').on('click', function () {
+            game.reset();
+            board.start();
+            selectedSquare = null;
+            removeHighlights();
+            moveHistoryElement.html('<p class="italic text-[#75726e]">เริ่มเกมใหม่... ตาเดินสีขาว</p>');
+        });
+
+        // ปุ่มย้อนกลับการเดิน
+        $('#undoBtn').on('click', function () {
+            game.undo();
+            board.position(game.fen());
+            selectedSquare = null;
+            removeHighlights();
+            updateStatus();
+        });
+
+        // ปรับขนาดกระดานอัตโนมัติ
+        $(window).resize(function() {
+            board.resize();
+        });
+    </script>
+</body>
+</html>
